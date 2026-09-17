@@ -1,0 +1,922 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Puzzle Padan Bayang Haiwan!</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@400;700;800&display=swap" rel="stylesheet">
+    
+    <style>
+        body {
+            font-family: 'Nunito', sans-serif;
+            background-color: #fff0f5; /* Soft pastel pink/purple background */
+            background-image: radial-gradient(#ffd1dc 2px, transparent 2px);
+            background-size: 30px 30px;
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            overflow-x: hidden;
+            overscroll-behavior-y: contain;
+        }
+
+        h1 {
+            font-family: 'Fredoka One', cursive;
+            color: #ff6b81;
+            text-shadow: 2px 2px 0px #fff, 4px 4px 0px rgba(255, 107, 129, 0.2);
+        }
+
+        .game-board {
+            background-color: rgba(255, 255, 255, 0.9);
+            border: 4px solid #ffccd5;
+            border-radius: 30px;
+            box-shadow: 0 15px 35px rgba(255, 107, 129, 0.15);
+            width: 100%;
+            max-width: 800px;
+            padding: 2rem;
+            position: relative;
+        }
+
+        /* Drop Zones (Shadows) */
+        .drop-zone-container {
+            display: flex;
+            justify-content: space-around;
+            flex-wrap: wrap;
+            gap: 20px;
+            margin-bottom: 3rem;
+            min-height: 150px;
+        }
+
+        .drop-zone {
+            width: 80px;
+            height: 80px;
+            background-color: #f8f9fa;
+            border: 4px dashed #cbd5e1;
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 3rem;
+            position: relative;
+            transition: all 0.3s ease;
+        }
+
+        @media (min-width: 768px) {
+            .drop-zone {
+                width: 120px;
+                height: 120px;
+                border-radius: 24px;
+                font-size: 5rem;
+            }
+        }
+
+        .drop-zone.active {
+            border-color: #60a5fa;
+            background-color: #eff6ff;
+            transform: scale(1.05);
+        }
+
+        .shadow-emoji {
+            filter: brightness(0) opacity(0.15); /* Makes it look like a grey shadow */
+            user-select: none;
+            pointer-events: none;
+        }
+
+        /* Draggable Items */
+        .draggables-container {
+            display: flex;
+            justify-content: space-around;
+            flex-wrap: wrap;
+            gap: 20px;
+            min-height: 150px;
+            background-color: #fff5f7;
+            padding: 20px;
+            border-radius: 24px;
+            border: 2px solid #ffe4e6;
+        }
+
+        .draggable-item {
+            width: 80px;
+            height: 80px;
+            font-size: 3rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: grab;
+            user-select: none;
+            touch-action: none; /* Crucial for custom touch dragging */
+            filter: drop-shadow(0px 8px 8px rgba(0,0,0,0.15));
+            transition: transform 0.1s ease;
+            z-index: 10;
+        }
+
+        @media (min-width: 768px) {
+            .draggable-item {
+                width: 100px;
+                height: 100px;
+                font-size: 5rem;
+            }
+        }
+
+        .draggable-item:active {
+            cursor: grabbing;
+        }
+
+        .draggable-item.dragging {
+            position: fixed;
+            pointer-events: none; /* Let pointer events pass through to drop zones */
+            z-index: 100;
+            transform: scale(1.2);
+            filter: drop-shadow(0px 15px 15px rgba(0,0,0,0.2));
+            transition: none; /* Remove transition so it follows finger instantly */
+        }
+
+        /* Animations */
+        @keyframes popIn {
+            0% { transform: scale(0); opacity: 0; }
+            80% { transform: scale(1.2); opacity: 1; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        @keyframes wobble {
+            0%, 100% { transform: translateX(0) rotate(0); }
+            15% { transform: translateX(-5px) rotate(-5deg); }
+            30% { transform: translateX(5px) rotate(5deg); }
+            45% { transform: translateX(-5px) rotate(-5deg); }
+            60% { transform: translateX(5px) rotate(5deg); }
+            75% { transform: translateX(-2px) rotate(-2deg); }
+        }
+
+        .matched-animation {
+            animation: popIn 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            filter: drop-shadow(0px 0px 15px rgba(255, 215, 0, 0.8));
+        }
+
+        .wobble-animation {
+            animation: wobble 0.5s ease;
+        }
+
+        /* UI Elements */
+        .stars-container {
+            display: flex;
+            gap: 10px;
+            font-size: 2rem;
+            margin-bottom: 1rem;
+            height: 40px;
+        }
+        
+        .star {
+            color: #cbd5e1;
+            transition: color 0.3s, transform 0.5s;
+        }
+        
+        .star.earned {
+            color: #fbbf24;
+            transform: rotate(360deg) scale(1.2);
+            filter: drop-shadow(0px 2px 5px rgba(251, 191, 36, 0.5));
+        }
+
+        #confetti-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1000;
+        }
+
+        /* Celebration Modal */
+        #celebration-modal {
+            background: rgba(255,255,255,0.95);
+            backdrop-filter: blur(5px);
+        }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+
+    <canvas id="confetti-canvas"></canvas>
+
+    <div id="start-screen" class="flex flex-col items-center justify-center w-full max-w-4xl mx-auto pt-10 md:pt-16 px-4 z-10 relative">
+        <div class="bg-white/95 backdrop-blur-sm p-8 md:p-14 rounded-[40px] shadow-2xl border-8 border-pink-300 text-center relative overflow-hidden w-full max-w-2xl">
+            <!-- Haiwan Terapung (Floating Animals) -->
+            <div class="absolute top-6 left-6 text-5xl md:text-6xl animate-bounce" style="animation-duration: 2s;">🦁</div>
+            <div class="absolute bottom-6 right-6 text-5xl md:text-6xl animate-bounce" style="animation-duration: 2.5s; animation-delay: 0.5s;">🐳</div>
+            <div class="absolute top-6 right-10 text-5xl md:text-6xl animate-bounce" style="animation-duration: 2.2s; animation-delay: 0.2s;">🦋</div>
+            <div class="absolute bottom-8 left-10 text-5xl md:text-6xl animate-bounce" style="animation-duration: 2.7s; animation-delay: 0.7s;">🐢</div>
+
+            <h1 class="text-5xl md:text-7xl mb-6 text-pink-500 font-['Fredoka_One'] drop-shadow-md leading-tight mt-4">Puzzle<br>Comel!</h1>
+            <p class="text-xl md:text-2xl text-gray-600 font-bold mb-10 px-4 relative z-10">Mari belajar padankan haiwan dengan bayang-bayangnya! 🧩✨</p>
+            
+            <div id="player-greeting" class="text-lg text-purple-600 font-bold mb-4 hidden"></div>
+
+            <button id="btn-start-game" class="relative z-10 bg-gradient-to-r from-pink-400 to-purple-400 hover:from-pink-500 hover:to-purple-500 text-white text-2xl md:text-3xl font-bold py-6 px-12 rounded-full shadow-xl transform transition-transform hover:scale-105 active:scale-95 border-4 border-white animate-pulse mb-4 w-full md:w-auto">
+                Mula Main! ▶️
+            </button>
+            
+            <button id="btn-show-subscribe" class="relative z-10 bg-white text-purple-500 font-bold py-3 px-8 rounded-full shadow-md transform transition-transform hover:scale-105 active:scale-95 border-2 border-purple-200 block mx-auto mt-2 text-lg">
+                🌟 Daftar Profil
+            </button>
+        </div>
+    </div>
+
+    <!-- Subscription Modal -->
+    <div id="subscribe-modal" class="hidden fixed inset-0 bg-black/40 backdrop-blur-sm flex flex-col items-center justify-center z-[100]">
+        <div class="bg-white p-8 rounded-[30px] shadow-2xl border-4 border-purple-300 text-center max-w-md w-[90%] transform transition-all scale-100">
+            <div class="text-5xl mb-4">👑</div>
+            <h2 class="text-3xl text-purple-600 font-['Fredoka_One'] mb-2">Pendaftaran Profil</h2>
+            <p class="text-gray-600 font-bold mb-6">Daftar nama awak untuk simpan rekod markah tertinggi secara kekal supaya tidak hilang!</p>
+            
+            <input type="text" id="player-name-input" placeholder="Nama Panggilan Awak..." class="w-full border-4 border-pink-100 rounded-xl px-4 py-3 mb-6 text-xl font-bold text-center focus:outline-none focus:border-pink-400 transition-colors">
+            
+            <div class="flex gap-4 justify-center">
+                <button id="btn-cancel-subscribe" class="bg-gray-200 text-gray-600 font-bold py-3 px-6 rounded-full hover:bg-gray-300 transition-colors">Batal</button>
+                <button id="btn-save-subscribe" class="bg-purple-500 text-white font-bold py-3 px-6 rounded-full hover:bg-purple-600 shadow-lg transform transition-transform active:scale-95">Simpan Profil 💾</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Game Screen (Hidden by default) -->
+    <div id="game-screen" class="hidden w-full flex-col items-center">
+        <div class="text-center w-full max-w-4xl mx-auto pt-2 pb-6">
+            <h1 class="text-4xl md:text-5xl mb-2">Puzzle Comel! 🧩</h1>
+            
+            <div class="flex flex-wrap justify-center gap-3 md:gap-6 mb-4 font-bold text-lg md:text-2xl px-2">
+                <div id="level-display" class="bg-white px-4 py-2 rounded-full shadow-md text-pink-500 border-2 border-pink-200">Peringkat: 1</div>
+                <div id="score-display" class="bg-white px-4 py-2 rounded-full shadow-md text-purple-500 border-2 border-purple-200 transition-transform">⭐ Markah: 0</div>
+                <div id="time-display" class="bg-white px-4 py-2 rounded-full shadow-md text-blue-500 border-2 border-blue-200">⏱️ Masa: 0s</div>
+            </div>
+            
+            <div id="stars-display" class="stars-container justify-center mb-6"></div>
+        </div>
+
+        <!-- Target Shadows Area -->
+        <div class="drop-zone-container" id="drop-zones">
+            <!-- Drop zones injected via JS -->
+        </div>
+
+        <!-- Draggable Animals Area -->
+        <h3 class="text-center text-gray-500 font-bold mb-3">Pilih haiwan di sini 👇</h3>
+        <div class="draggables-container" id="draggables-area">
+            <!-- Draggable items injected via JS -->
+        </div>
+
+        <!-- Level Complete Celebration (Hidden by default) -->
+        <div id="celebration-modal" class="hidden absolute inset-0 rounded-[26px] flex flex-col items-center justify-center z-50">
+            <div class="text-7xl mb-4 animate-bounce">🌟🎉🌟</div>
+            <h2 class="text-4xl text-pink-500 font-['Fredoka_One'] mb-2 text-center">Bagus!</h2>
+            <p class="text-xl text-gray-700 font-bold mb-2 text-center px-4">Awak berjaya selesaikan puzzle ini!</p>
+            <p id="win-score-text" class="text-2xl md:text-3xl text-pink-600 font-bold mb-8 text-center px-4">⭐ Markah Terkumpul: 0</p>
+            <button id="btn-next-level" class="bg-gradient-to-r from-pink-400 to-purple-400 hover:from-pink-500 hover:to-purple-500 text-white text-xl font-bold py-4 px-10 rounded-full shadow-lg transform transition-transform active:scale-95 border-4 border-white">
+                Main Peringkat Seterusnya! 🚀
+            </button>
+        </div>
+
+        <!-- Timeout Modal (Hidden by default) -->
+        <div id="timeout-modal" class="hidden absolute inset-0 bg-white bg-opacity-95 backdrop-blur-sm rounded-[26px] flex flex-col items-center justify-center z-50">
+            <div class="text-7xl mb-4 animate-bounce">⏰</div>
+            <h2 class="text-4xl text-blue-500 font-['Fredoka_One'] mb-2 text-center">Masa Tamat!</h2>
+            <p class="text-xl text-gray-700 font-bold mb-8 text-center px-4">Jangan putus asa, mari cuba lagi!</p>
+            <button id="btn-retry" class="bg-gradient-to-r from-blue-400 to-cyan-400 hover:from-blue-500 hover:to-cyan-500 text-white text-xl font-bold py-4 px-10 rounded-full shadow-lg transform transition-transform active:scale-95 border-4 border-white">
+                Cuba Lagi 🔄
+            </button>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Konfigurasi persekitaran pintar
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'puzzle-haiwan-app';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+        const authToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        let db = null;
+        let auth = null;
+        let currentUser = null;
+        
+        window.cloudProfile = {
+            name: "",
+            highScore: 0
+        };
+
+        if (firebaseConfig) {
+            const app = initializeApp(firebaseConfig);
+            auth = getAuth(app);
+            db = getFirestore(app);
+
+            // Pengesahan identiti mandatori sebelum membaca data awan
+            const initAuth = async () => {
+                try {
+                    if (authToken) {
+                        await signInWithCustomToken(auth, authToken);
+                    } else {
+                        await signInAnonymously(auth);
+                    }
+                } catch (error) {
+                    console.error("Gagal log masuk awan:", error);
+                }
+            };
+
+            initAuth();
+
+            onAuthStateChanged(auth, async (user) => {
+                if (user) {
+                    currentUser = user;
+                    await loadProfile();
+                }
+            });
+        }
+
+        async function loadProfile() {
+            if (!currentUser || !db) return;
+            
+            // Lokasi laluan berstruktur mandatori untuk keselamatan (6 Segmen)
+            const docRef = doc(db, 'artifacts', appId, 'users', currentUser.uid, 'profile', 'data');
+            try {
+                const docSnap = await getDoc(docRef);
+                if (docSnap.exists()) {
+                    window.cloudProfile = docSnap.data();
+                    updateGreetingUI();
+                }
+            } catch (e) {
+                console.error("Gagal muat profil:", e);
+            }
+        }
+
+        window.saveProfileToCloud = async function(name) {
+            if (!currentUser || !db) return;
+            
+            window.cloudProfile.name = name;
+            const docRef = doc(db, 'artifacts', appId, 'users', currentUser.uid, 'profile', 'data');
+            try {
+                await setDoc(docRef, window.cloudProfile, { merge: true });
+                updateGreetingUI();
+            } catch (e) {
+                console.error("Gagal simpan profil:", e);
+            }
+        }
+
+        window.saveScoreToCloud = async function(newScore) {
+            if (!currentUser || !db || !window.cloudProfile.name) return;
+            
+            if (newScore > (window.cloudProfile.highScore || 0)) {
+                window.cloudProfile.highScore = newScore;
+                const docRef = doc(db, 'artifacts', appId, 'users', currentUser.uid, 'profile', 'data');
+                try {
+                    await setDoc(docRef, { highScore: newScore }, { merge: true });
+                    updateGreetingUI();
+                } catch (e) {
+                    console.error("Gagal simpan markah:", e);
+                }
+            }
+        }
+
+        function updateGreetingUI() {
+            const greetingEl = document.getElementById('player-greeting');
+            const btnSubscribe = document.getElementById('btn-show-subscribe');
+            if (window.cloudProfile.name) {
+                greetingEl.innerHTML = `Selamat kembali, <span class="uppercase">${window.cloudProfile.name}</span>! 🎉<br><span class="text-sm text-pink-500 font-extrabold">🏆 Rekod Tertinggi Awak: ${window.cloudProfile.highScore || 0}</span>`;
+                greetingEl.classList.remove('hidden');
+                btnSubscribe.innerHTML = "📝 Tukar Nama Profil";
+            }
+        }
+        
+        // Logik Butang Borang Langganan (Modal)
+        document.getElementById('btn-show-subscribe').addEventListener('click', () => {
+            document.getElementById('subscribe-modal').classList.remove('hidden');
+            if(window.cloudProfile.name) {
+                document.getElementById('player-name-input').value = window.cloudProfile.name;
+            }
+        });
+
+        document.getElementById('btn-cancel-subscribe').addEventListener('click', () => {
+            document.getElementById('subscribe-modal').classList.add('hidden');
+        });
+
+        document.getElementById('btn-save-subscribe').addEventListener('click', () => {
+            const name = document.getElementById('player-name-input').value.trim();
+            if(name) {
+                window.saveProfileToCloud(name);
+                document.getElementById('subscribe-modal').classList.add('hidden');
+            }
+        });
+    </script>
+
+    <script>
+        // Game Database - Safe emojis only (Unicode 12.0 and below)
+        const btnRetry = document.getElementById('btn-retry');
+        const winScoreText = document.getElementById('win-score-text');
+        
+        // --- ADDED MISSING ANIMAL DATABASE ---
+        const animalDatabase = [
+            { id: "1", name: "Singa", emoji: "🦁" },
+            { id: "2", name: "Kucing", emoji: "🐱" },
+            { id: "3", name: "Harimau", emoji: "🐯" },
+            { id: "4", name: "Kuda", emoji: "🐴" },
+            { id: "5", name: "Lembu", emoji: "🐮" },
+            { id: "6", name: "Zirafah", emoji: "🦒" },
+            { id: "7", name: "Gajah", emoji: "🐘" },
+            { id: "8", name: "Beruang", emoji: "🐻" },
+            { id: "9", name: "Koala", emoji: "🐨" },
+            { id: "10", name: "Panda", emoji: "🐼" },
+            { id: "11", name: "Arnab", emoji: "🐰" },
+            { id: "12", name: "Katak", emoji: "🐸" },
+            { id: "13", name: "Burung Hantu", emoji: "🦉" },
+            { id: "14", name: "Helang", emoji: "🦅" },
+            { id: "15", name: "Itik", emoji: "🦆" },
+            { id: "16", name: "Penguin", emoji: "🐧" },
+            { id: "17", name: "Ayam", emoji: "🐔" },
+            { id: "18", name: "Kura-kura", emoji: "🐢" },
+            { id: "19", name: "Ular", emoji: "🐍" },
+            { id: "20", name: "Buaya", emoji: "🐊" },
+            { id: "21", name: "Ikan Paus", emoji: "🐳" },
+            { id: "22", name: "Lumba-lumba", emoji: "🐬" },
+            { id: "23", name: "Ikan", emoji: "🐟" },
+            { id: "24", name: "Sotong", emoji: "🐙" },
+            { id: "25", name: "Siput", emoji: "🐌" },
+            { id: "26", name: "Rama-rama", emoji: "🦋" },
+            { id: "27", name: "Lebah", emoji: "🐝" },
+            { id: "28", name: "Monyet", emoji: "🐒" },
+            { id: "29", name: "Musang", emoji: "🦊" },
+            { id: "30", name: "Landak", emoji: "🦔" }
+        ];
+        
+        // --- ADDED MISSING DOM VARIABLES ---
+        const btnNextLevel = document.getElementById('btn-next-level');
+        const celebrationModal = document.getElementById('celebration-modal');
+        const timeoutModal = document.getElementById('timeout-modal');
+        const dropZonesContainer = document.getElementById('drop-zones');
+        const draggablesContainer = document.getElementById('draggables-area');
+        const levelDisplay = document.getElementById('level-display');
+        const scoreDisplay = document.getElementById('score-display');
+        const timeDisplay = document.getElementById('time-display');
+        const starsDisplay = document.getElementById('stars-display');
+
+        // Pemuat pembolehubah permainan
+        let timerInterval;
+        let timeLeft = 0;
+        let totalScore = 0;
+        let currentLevel = 1;
+        let matchesMade = 0;
+        let itemsToMatch = 0;
+        if (typeof availableAnimals === 'undefined') window.availableAnimals = [];
+        if (typeof currentRoundAnimals === 'undefined') window.currentRoundAnimals = [];
+        // -----------------------------------
+
+        // Elemen Muka Depan
+        const startScreen = document.getElementById('start-screen');
+        const gameScreen = document.getElementById('game-screen');
+        const btnStartGame = document.getElementById('btn-start-game');
+
+        // Audio System (Synthesized for no external dependencies)
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        
+        function playSound(type) {
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            const osc = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            osc.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            
+            const now = audioCtx.currentTime;
+            
+            if (type === 'grab') {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(300, now);
+                osc.frequency.exponentialRampToValueAtTime(400, now + 0.1);
+                gainNode.gain.setValueAtTime(0.1, now);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+                osc.start(now);
+                osc.stop(now + 0.1);
+            } else if (type === 'match') {
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(400, now);
+                osc.frequency.setValueAtTime(600, now + 0.1);
+                osc.frequency.setValueAtTime(1000, now + 0.2);
+                gainNode.gain.setValueAtTime(0.2, now);
+                gainNode.gain.linearRampToValueAtTime(0, now + 0.3);
+                osc.start(now);
+                osc.stop(now + 0.3);
+            } else if (type === 'wrong') {
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(200, now);
+                osc.frequency.exponentialRampToValueAtTime(150, now + 0.2);
+                gainNode.gain.setValueAtTime(0.1, now);
+                gainNode.gain.linearRampToValueAtTime(0, now + 0.2);
+                osc.start(now);
+                osc.stop(now + 0.2);
+            } else if (type === 'win') {
+                const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
+                notes.forEach((freq, i) => {
+                    const o = audioCtx.createOscillator();
+                    const g = audioCtx.createGain();
+                    o.connect(g);
+                    g.connect(audioCtx.destination);
+                    o.type = 'sine';
+                    o.frequency.value = freq;
+                    g.gain.setValueAtTime(0.2, now + (i * 0.15));
+                    g.gain.exponentialRampToValueAtTime(0.01, now + (i * 0.15) + 0.4);
+                    o.start(now + (i * 0.15));
+                    o.stop(now + (i * 0.15) + 0.4);
+                });
+            }
+        }
+
+        function shuffleArray(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+            return array;
+        }
+
+        function startTimer() {
+            clearInterval(timerInterval);
+            // Masa bergantung pada bilangan haiwan (15 saat untuk setiap haiwan)
+            timeLeft = itemsToMatch * 15; 
+            updateTimeDisplay();
+            
+            timerInterval = setInterval(() => {
+                timeLeft--;
+                updateTimeDisplay();
+                
+                if (timeLeft <= 0) {
+                    clearInterval(timerInterval);
+                    showTimeoutScreen();
+                }
+            }, 1000);
+        }
+
+        function updateTimeDisplay() {
+            timeDisplay.innerHTML = `⏱️ Masa: ${timeLeft}s`;
+            if (timeLeft <= 10 && timeLeft > 0) {
+                timeDisplay.classList.remove('text-blue-500', 'border-blue-200');
+                timeDisplay.classList.add('text-red-500', 'border-red-300', 'animate-pulse');
+            } else {
+                timeDisplay.classList.add('text-blue-500', 'border-blue-200');
+                timeDisplay.classList.remove('text-red-500', 'border-red-300', 'animate-pulse');
+            }
+        }
+
+        function showTimeoutScreen() {
+            playSound('wrong');
+            timeoutModal.classList.remove('hidden');
+        }
+
+        function updateScore(points) {
+            totalScore += points;
+            scoreDisplay.innerHTML = `⭐ Markah: ${totalScore}`;
+            // Comel pop animation bila dapat markah
+            scoreDisplay.style.transform = 'scale(1.2)';
+            setTimeout(() => { scoreDisplay.style.transform = 'scale(1)'; }, 200);
+        }
+
+        function startRound() {
+            matchesMade = 0;
+            dropZonesContainer.innerHTML = '';
+            draggablesContainer.innerHTML = '';
+            celebrationModal.classList.add('hidden');
+            timeoutModal.classList.add('hidden');
+            
+            // Adjust items to match based on current level
+            if (currentLevel === 1) itemsToMatch = 2;
+            else if (currentLevel <= 3) itemsToMatch = 3;
+            else if (currentLevel <= 6) itemsToMatch = 4;
+            else if (currentLevel <= 10) itemsToMatch = 5;
+            else itemsToMatch = 6;
+            
+            // Update Level UI
+            if (levelDisplay) levelDisplay.textContent = `Peringkat: ${currentLevel}`;
+            
+            // Start the timer for this round
+            startTimer();
+
+            // Generate Stars UI
+            starsDisplay.innerHTML = '';
+            for(let i=0; i<itemsToMatch; i++) {
+                starsDisplay.innerHTML += `<span class="star" id="star-${i}">⭐</span>`;
+            }
+
+            // Pick random animals for this round (no repeats until all are shown)
+            if (availableAnimals.length < itemsToMatch) {
+                availableAnimals = shuffleArray([...animalDatabase]);
+            }
+            currentRoundAnimals = availableAnimals.splice(0, itemsToMatch);
+            
+            // Create Drop Zones (Shadows)
+            currentRoundAnimals.forEach(animal => {
+                const zone = document.createElement('div');
+                zone.className = 'drop-zone';
+                zone.dataset.id = animal.id;
+                
+                const shadow = document.createElement('div');
+                shadow.className = 'shadow-emoji';
+                shadow.textContent = animal.emoji;
+                
+                zone.appendChild(shadow);
+                dropZonesContainer.appendChild(zone);
+            });
+
+            // Create Draggable Items and shuffle their placement
+            let draggables = [...currentRoundAnimals];
+            shuffleArray(draggables);
+
+            draggables.forEach(animal => {
+                const dragItem = document.createElement('div');
+                dragItem.className = 'draggable-item';
+                dragItem.dataset.id = animal.id;
+                dragItem.textContent = animal.emoji;
+                
+                // Add Pointer Events for universal touch/mouse support
+                dragItem.addEventListener('pointerdown', handleDragStart);
+                
+                draggablesContainer.appendChild(dragItem);
+            });
+        }
+
+        
+        let activeDragElement = null;
+        let initialX, initialY, currentX, currentY;
+        let offsetX, offsetY;
+
+        function handleDragStart(e) {
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            e.preventDefault(); // Prevent default touch actions (like scrolling)
+            
+            activeDragElement = e.currentTarget;
+            playSound('grab');
+
+            // Calculate offset so the element centers on the finger/mouse
+            const rect = activeDragElement.getBoundingClientRect();
+            offsetX = e.clientX - rect.left - (rect.width/2);
+            offsetY = e.clientY - rect.top - (rect.height/2);
+
+            // Set initial fixed position coordinates
+            currentX = e.clientX - (rect.width/2) - offsetX;
+            currentY = e.clientY - (rect.height/2) - offsetY;
+
+            // Apply classes and styles for dragging
+            activeDragElement.classList.add('dragging');
+            activeDragElement.style.left = `${currentX}px`;
+            activeDragElement.style.top = `${currentY}px`;
+
+            // Add event listeners to window to track movement everywhere
+            window.addEventListener('pointermove', handleDragMove);
+            window.addEventListener('pointerup', handleDragEnd);
+            window.addEventListener('pointercancel', handleDragEnd);
+            
+            // Highlight potential drop zones
+            document.querySelectorAll('.drop-zone').forEach(z => {
+                if(!z.classList.contains('matched')) z.style.borderColor = '#cbd5e1';
+            });
+        }
+
+        function handleDragMove(e) {
+            if (!activeDragElement) return;
+            e.preventDefault();
+
+            // Update position based on pointer
+            const rect = activeDragElement.getBoundingClientRect();
+            currentX = e.clientX - (rect.width/2) - offsetX;
+            currentY = e.clientY - (rect.height/2) - offsetY;
+            
+            activeDragElement.style.left = `${currentX}px`;
+            activeDragElement.style.top = `${currentY}px`;
+
+            // Check if hovering over a valid drop zone for visual feedback
+            const dropZones = document.querySelectorAll('.drop-zone:not(.matched)');
+            let isHovering = false;
+            
+            dropZones.forEach(zone => {
+                const zoneRect = zone.getBoundingClientRect();
+                // Simple collision detection (pointer is inside zone box)
+                if (e.clientX >= zoneRect.left && e.clientX <= zoneRect.right &&
+                    e.clientY >= zoneRect.top && e.clientY <= zoneRect.bottom) {
+                    zone.classList.add('active');
+                    isHovering = true;
+                } else {
+                    zone.classList.remove('active');
+                }
+            });
+        }
+
+        function handleDragEnd(e) {
+            if (!activeDragElement) return;
+
+            window.removeEventListener('pointermove', handleDragMove);
+            window.removeEventListener('pointerup', handleDragEnd);
+            window.removeEventListener('pointercancel', handleDragEnd);
+
+            const animalId = activeDragElement.dataset.id;
+            let matchedZone = null;
+            
+            // Check collision with drop zones based on pointer release coordinates
+            const dropZones = document.querySelectorAll('.drop-zone:not(.matched)');
+            dropZones.forEach(zone => {
+                zone.classList.remove('active'); // reset visuals
+                const rect = zone.getBoundingClientRect();
+                if (e.clientX >= rect.left && e.clientX <= rect.right &&
+                    e.clientY >= rect.top && e.clientY <= rect.bottom) {
+                    
+                    if (zone.dataset.id === animalId) {
+                        matchedZone = zone;
+                    }
+                }
+            });
+
+            if (matchedZone) {
+                // Correct Match!
+                playSound('match');
+                
+                // Animate and set inside drop zone
+                activeDragElement.classList.remove('dragging');
+                activeDragElement.style.left = 'auto';
+                activeDragElement.style.top = 'auto';
+                activeDragElement.removeEventListener('pointerdown', handleDragStart);
+                activeDragElement.style.cursor = 'default';
+                
+                matchedZone.innerHTML = ''; // Remove shadow
+                matchedZone.appendChild(activeDragElement);
+                matchedZone.classList.add('matched');
+                matchedZone.style.borderStyle = 'solid';
+                matchedZone.style.borderColor = '#4ade80'; // Green success border
+                matchedZone.style.backgroundColor = '#f0fdf4';
+                
+                activeDragElement.classList.add('matched-animation');
+
+                // Paparkan nama haiwan
+                const animalData = animalDatabase.find(a => a.id === animalId);
+                if (animalData) {
+                    const nameLabel = document.createElement('div');
+                    // Menggunakan kelas tailwind untuk menghasilkan label nama yang comel berbentuk 'pil' di bawah kotak
+                    nameLabel.className = 'absolute -bottom-8 md:-bottom-10 left-1/2 transform -translate-x-1/2 font-bold text-sm md:text-xl text-pink-500 whitespace-nowrap bg-white px-3 md:px-4 py-1 rounded-full shadow-md border-2 border-pink-200 z-20';
+                    nameLabel.style.animation = 'popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards';
+                    nameLabel.textContent = animalData.name;
+                    matchedZone.appendChild(nameLabel);
+                }
+
+                // Light up a star
+                const star = document.getElementById(`star-${matchesMade}`);
+                if(star) star.classList.add('earned');
+
+                // Tambah 10 Markah untuk setiap padanan yang betul
+                updateScore(10);
+
+                matchesMade++;
+                
+                if (matchesMade === itemsToMatch) {
+                    clearInterval(timerInterval); // Berhentikan masa
+                    setTimeout(showWinScreen, 500);
+                }
+
+            } else {
+                // Wrong or dropped outside - Snap back
+                playSound('wrong');
+                
+                let elementToWobble = activeDragElement; // Save reference before it becomes null
+                
+                elementToWobble.classList.remove('dragging');
+                elementToWobble.style.left = 'auto';
+                elementToWobble.style.top = 'auto';
+                
+                // Add wobble animation
+                elementToWobble.classList.add('wobble-animation');
+                setTimeout(() => {
+                    if(elementToWobble) elementToWobble.classList.remove('wobble-animation');
+                }, 500);
+            }
+
+            activeDragElement = null;
+        }
+
+        function showWinScreen() {
+            playSound('win');
+            
+            // Berikan bonus markah berdasarkan baki masa
+            if (timeLeft > 0) {
+                const bonus = timeLeft * 2;
+                updateScore(bonus);
+            }
+            
+            winScoreText.innerHTML = `⭐ Markah Terkumpul: ${totalScore}`;
+            
+            if (typeof window.saveScoreToCloud === 'function') {
+                window.saveScoreToCloud(totalScore);
+            }
+            
+            celebrationModal.classList.remove('hidden');
+            fireConfetti();
+        }
+
+        btnNextLevel.addEventListener('click', () => {
+            playSound('grab');
+            currentLevel++; // Increase level!
+            startRound();
+        });
+
+        btnRetry.addEventListener('click', () => {
+            playSound('grab');
+            startRound(); // Mula semula pusingan yang sama
+        });
+
+        // --- Confetti Logic ---
+        const canvas = document.getElementById('confetti-canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        });
+
+        let confettiParticles = [];
+        let confettiAnimating = false;
+
+        function createConfetti() {
+            const colors = ['#ff6b81', '#a25afd', '#26ccff', '#88ff5a', '#fcff42'];
+            for (let i = 0; i < 150; i++) {
+                confettiParticles.push({
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * canvas.height - canvas.height,
+                    r: Math.random() * 8 + 4,
+                    dx: Math.random() * 6 - 3,
+                    dy: Math.random() * 5 + 3,
+                    color: colors[Math.floor(Math.random() * colors.length)],
+                    tilt: Math.floor(Math.random() * 10) - 10,
+                    tiltAngleInc: (Math.random() * 0.07) + 0.05,
+                    tiltAngle: 0,
+                    shape: Math.random() > 0.5 ? 'circle' : 'rect'
+                });
+            }
+        }
+
+        function drawConfetti() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            let particle;
+            for (let i = 0; i < confettiParticles.length; i++) {
+                particle = confettiParticles[i];
+                ctx.beginPath();
+                ctx.lineWidth = particle.r;
+                ctx.strokeStyle = particle.color;
+                ctx.fillStyle = particle.color;
+                particle.tiltAngle += particle.tiltAngleInc;
+                
+                if (particle.shape === 'circle') {
+                    ctx.arc(particle.x, particle.y, particle.r/2, 0, Math.PI * 2);
+                    ctx.fill();
+                } else {
+                    ctx.moveTo(particle.x + particle.tilt + particle.r, particle.y);
+                    ctx.lineTo(particle.x + particle.tilt, particle.y + particle.tilt + particle.r);
+                    ctx.stroke();
+                }
+
+                particle.y += particle.dy;
+                particle.x += particle.dx;
+
+                if (particle.y > canvas.height) {
+                    particle.y = -10;
+                    particle.x = Math.random() * canvas.width;
+                }
+            }
+        }
+
+        function animateConfetti() {
+            if(confettiAnimating) {
+                requestAnimationFrame(animateConfetti);
+                drawConfetti();
+            } else {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+            }
+        }
+
+        function fireConfetti() {
+            confettiParticles = [];
+            createConfetti();
+            confettiAnimating = true;
+            animateConfetti();
+            setTimeout(() => { confettiAnimating = false; }, 4000);
+        }
+
+        // Fungsi apabila butang Mula Main ditekan
+        btnStartGame.addEventListener('click', () => {
+            playSound('grab');
+            startScreen.classList.add('hidden'); // Sembunyikan muka depan
+            gameScreen.classList.remove('hidden'); // Paparkan skrin permainan
+            gameScreen.classList.add('flex');
+            
+            // Mulakan Audio Context (Syarat pelayar web moden)
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            
+            startRound(); // Mulakan pusingan pertama dan pemasa
+        });
+
+    </script>
+</body>
+</html>
